@@ -6,6 +6,10 @@ slimstk_init ();
 
 $enable_ssl = 0;
 
+$apache_dir = "/etc/apache";
+if (! file_exists ($apache_dir))
+	$apache_dir = "/etc/apache2";
+
 $siteid = preg_replace ('/[.].*/', '', basename (getcwd ()));
 if (! preg_match ('/-/', $siteid))
 	$siteid .= sprintf ("-%s", $_SERVER['USER']);
@@ -191,8 +195,6 @@ function find_ssl_files ($name) {
 }
 
 function make_virtual_host ($args) {
-	global $apache_dir;
-
 	$ret = "";
 
 	if ($args->port != 80 && $args->port != 443) {
