@@ -1,0 +1,156 @@
+#! /bin/sh
+
+if [ `id -u` = 0 ]
+then
+    echo "can't run this as root"
+    exit 1
+fi
+
+
+cwd=`pwd`
+siteid=`basename $cwd | sed 's/[.].*//'`
+case $siteid in
+    *-*)
+	;;
+    *)
+	siteid=${siteid}-${USER}
+	;;
+esac
+
+apache_dir=/etc/apache2
+
+vers=`grep Ubuntu /etc/issue | head -1`
+case "$vers" in
+"Ubuntu 12"*)
+	avail=${apache_dir}/sites-available/${siteid}
+	enabled=${apache_dir}/sites-enabled/${siteid}
+	;;
+"Ubuntu 14"*)
+	avail=${apache_dir}/sites-available/${siteid}.conf
+	enabled=${apache_dir}/sites-enabled/${siteid}.conf
+	;;
+*)
+	echo "unknown system version: $vers"
+	exit 1
+	;;
+esac
+
+new=TMP.apache.conf
+prev=TMP.apache.prev
+
+rm -f $prev
+
+need_graceful=0
+was_enabled=0
+
+if [ ! -r $new ]
+then
+    echo "$new does not exist"
+    exit 1
+fi
+
+apache2ctl configtest > /dev/null 2>&1
+if [ $? != 0 ]
+then
+    echo "pre-existing error ... stopping before making changes"
+    exit 1
+fi
+
+cmp $new $avail > /dev/null 2>&1
+
+if [ $? != 0 ]
+then
+    if [ -r $avail ]
+    then
+	cp $avail $prev
+    fi
+    echo "updating $avail"
+    sudo cp $new $avail
+    need_graceful=1
+fi
+
+if [ -r $enabled ]
+then
+    was_enabled=1
+else
+    echo "echo doing a2ensite"
+    sudo a2ensite -q $siteid
+fi
+
+apache2ctl configtest > TMP.err 2>&1
+
+if [ $? != 0 ]
+then
+    cat TMP.err
+    echo "problem with new configuration ... trying to roll back"
+    if [ $was_enabled = 1 ]
+    then
+	# put back avail, assume enabled is linked to it
+	cp $prev $avail
+	apache2ctl configtest > /dev/null 2>&1
+	if [ $? = 0 ]
+	then
+	    # apparently putting back the old config file is ok
+	    echo "Error in the new config file.  I've tried to restore"
+	    echo "the apache configuration.  Please check any other"
+	    echo "sites on this server, then fix this configuration"
+	    echo "and try again."
+	    exit 1
+	else
+	    # we put back the old config file, but configtest still says error
+	    sudo a2dissite -q $siteid
+	    sudo rm -f $avail $enabled
+
+	    echo "UH OH: Error in the new config file, and I couldn't"
+	    echo "properly restore the apache configuration."
+	    echo "$siteid is disabled now"
+	    echo "Please check any other sites on this server, then fix this"
+	    echo "configuration and try again."
+	    exit 1
+	fi
+    else
+	# site wasn't enabled before, so just get the mess out of
+	# the running config
+	sudo a2dissite $siteid
+	sudo rm -f $avail $enabled
+	apache2ctl configtest > /dev/null 2>&1
+	if [ $? = 0 ]
+	then
+	    # aparently successful at restore prior apache state
+	    echo "bad configuration, not installing site"
+	    exit 1
+	else
+	    echo "UH OH: bad configuration, but I couldn't return"
+	    echo "apache to a known good state.  Things may be"
+	    echo "weird.  Please check other websites on this server"
+	    echo "then fix this configuration and try again."
+	    exit 1
+	fi
+    fi
+fi
+
+if [ $was_enabled = 0 ]
+then
+    echo "restarting apache"
+    sudo /etc/init.d/apache2 restart
+    sleep 1
+elif [ $need_graceful = 1 ]
+then
+    echo "doing apache graceful"
+    sudo apache2ctl graceful
+    if [ $? = 0 ]
+    then
+	echo "   ...success"
+    else
+	echo "something went wrong with apache graceful .. disabling site"
+	sudo a2dissite $siteid
+    fi
+fi
+
+pidof -s apache2 > /dev/null
+if [ $? != 0 ]
+then
+    echo ""
+    echo "trouble: apache is not running"
+    exit 1
+fi

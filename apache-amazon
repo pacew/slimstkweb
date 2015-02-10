@@ -1,0 +1,134 @@
+#! /bin/sh
+
+if [ `id -u` = 0 ]
+then
+    echo "can't run this as root"
+    exit 1
+fi
+
+
+cwd=`pwd`
+siteid=`basename $cwd | sed 's/[.].*//'`
+case $siteid in
+    *-*)
+	;;
+    *)
+	siteid=${siteid}-${USER}
+	;;
+esac
+
+enabled=${HOME}/sites-enabled/${siteid}.conf
+new=TMP.apache.conf
+prev=TMP.apache.prev
+
+rm -f $prev
+
+need_graceful=0
+was_enabled=0
+
+if [ ! -r $new ]
+then
+    echo "$new does not exist"
+    exit 1
+fi
+
+sudo apachectl configtest > /dev/null 2>&1
+if [ $? != 0 ]
+then
+    echo "pre-existing error ... stopping before making changes"
+    exit 1
+fi
+
+if [ -r $enabled ]
+then
+    was_enabled=1
+fi
+
+cmp $new $enabled > /dev/null 2>&1
+
+if [ $? != 0 ]
+then
+    if [ $was_enabled = 1 ]
+    then
+	cp $enabled $prev
+    fi
+    echo "updating $enabled"
+    sudo cp $new $enabled
+    need_graceful=1
+fi
+
+sudo apachectl configtest > TMP.err 2>&1
+
+if [ $? != 0 ]
+then
+    cat TMP.err
+    echo "problem with new configuration ... trying to roll back"
+    if [ $was_enabled = 1 ]
+    then
+	# put back avail, assume enabled is linked to it
+	cp $prev $enabled
+	sudo apachectl configtest > /dev/null 2>&1
+	if [ $? = 0 ]
+	then
+	    # apparently putting back the old config file is ok
+	    echo "Error in the new config file.  I've tried to restore"
+	    echo "the apache configuration.  Please check any other"
+	    echo "sites on this server, then fix this configuration"
+	    echo "and try again."
+	    exit 1
+	else
+	    # we put back the old config file, but configtest still says error
+	    sudo rm -f $enabled
+
+	    echo "UH OH: Error in the new config file, and I couldn't"
+	    echo "properly restore the apache configuration."
+	    echo "$siteid is disabled now"
+	    echo "Please check any other sites on this server, then fix this"
+	    echo "configuration and try again."
+	    exit 1
+	fi
+    else
+	# site wasn't enabled before, so just get the mess out of
+	# the running config
+	sudo rm -f $enabled
+	sudo apachectl configtest > /dev/null 2>&1
+	if [ $? = 0 ]
+	then
+	    # aparently successful at restore prior apache state
+	    echo "bad configuration, not installing site"
+	    exit 1
+	else
+	    echo "UH OH: bad configuration, but I couldn't return"
+	    echo "apache to a known good state.  Things may be"
+	    echo "weird.  Please check other websites on this server"
+	    echo "then fix this configuration and try again."
+	    exit 1
+	fi
+    fi
+fi
+
+if [ $was_enabled = 0 ]
+then
+    echo "restarting apache"
+    sudo apachectl restart
+    sleep 1
+elif [ $need_graceful = 1 ]
+then
+    echo "doing apache graceful"
+    sudo apachectl graceful
+    if [ $? = 0 ]
+    then
+	echo "   ...success"
+    else
+	echo "something went wrong with apache graceful .. disabling site"
+	rm -f $enabled
+    fi
+fi
+
+pidof -s httpd > /dev/null
+if [ $? != 0 ]
+then
+    echo ""
+    echo "trouble: apache is not running"
+    exit 1
+fi

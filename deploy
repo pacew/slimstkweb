@@ -1,0 +1,101 @@
+#! /usr/bin/php
+<?php /* -*- mode:php -*- */
+
+require_once ("/var/slimstk/slimstk.php");
+slimstk_init ();
+
+$argv = $_SERVER['argv'];
+
+if (($for_conf_key = @$argv[1]) == "") {
+	printf ("usage: ./deploy conf_key\n");
+	printf("   for example: ./deploy production\n");
+	exit (1);
+}
+
+if (preg_match ('/-/', $for_conf_key)) {
+	printf ("just give the conf_key, not the full siteid\n");
+	exit (1);
+}
+
+$app_name = preg_replace ('/-.*/', '', basename (getcwd ()));
+$for_siteid = sprintf ("%s-%s", $app_name, $for_conf_key);
+
+$match = 0;
+foreach ($slimstk['stacks'] as $stkname => $stkinfo) {
+	foreach ($stkinfo['sites'] as $siteid => $sinfo) {
+		if ($siteid == $for_siteid) {
+			$match = 1;
+			break;
+		}
+	}
+}
+
+if ($match == 0) {
+	printf ("unknown site: %s\n", $for_siteid);
+	exit (1);
+}
+
+if (($appinfo = @$slimstk['apps'][$app_name]) == NULL) {
+	printf ("can't find appinfo in slimstk config\n");
+	exit (1);
+}
+
+if (($deploy_bucket = @$appinfo['deploy_bucket']) == NULL) {
+	printf ("can't find deploy_bucket in slimstk config\n");
+	exit (1);
+}
+
+$val = trim (shell_exec ("git status --porcelain"));
+if ($val != "") {
+	printf ("warning: working directory is dirty\n");
+	printf ("deploy will use files from the last commit\n");
+	printf ("\n");
+}
+
+$commit = trim (shell_exec ("git rev-parse --short HEAD"));
+
+$timestamp = trim (shell_exec ("git log --max-count=1 --pretty='%at' HEAD"));
+
+@unlink ("TMP.tar");
+system ("git archive --output TMP.tar HEAD");
+
+system ("git log --max-count=1 HEAD > TMP.log");
+system ("tar -f TMP.tar"
+	." --transform 's:TMP.log:website/commit:'"
+	." --append"
+	." TMP.log");
+system ("gzip -f TMP.tar");
+
+$md5sum = trim (shell_exec ("md5sum TMP.tar.gz"));
+$md5sum = preg_replace ("/[ \t].*/", "", $md5sum);
+
+$output_name = sprintf ("%s.%s.%s.tgz",
+			$for_siteid,
+			strftime ("%Y%m%dT%H%M%S", $timestamp),
+			$commit);
+
+$dest = sprintf ("s3://%s/%s/%s", $deploy_bucket, $for_siteid, $output_name);
+$cmd = sprintf ("aws s3 cp TMP.tar.gz %s", escapeshellarg ($dest));
+printf ("%s\n", $cmd);
+system ($cmd, $rc);
+if ($rc != 0) {
+	printf ("error running: %s\n", $cmd);
+	exit (1);
+}
+
+@unlink ("TMP.latest");
+$text = sprintf ("%s %s\n", $md5sum, $output_name);
+file_put_contents ("TMP.latest", $text);
+$dest = sprintf ("s3://%s/%s/latest", $deploy_bucket, $for_siteid);
+$cmd = sprintf ("aws s3 cp TMP.latest %s", escapeshellarg ($dest));
+printf ("%s\n", $cmd);
+system ($cmd, $rc);
+if ($rc != 0) {
+	printf ("error running: %s\n", $cmd);
+	exit (1);
+}
+
+printf ("ok, now do...\n");
+
+exit (0);
+

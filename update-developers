@@ -1,0 +1,49 @@
+#! /usr/bin/php
+<?php /* -*- mode:php -*- */
+
+printf ("update-developers: not ready yet\n");
+
+require_once ("/var/pstacks/conflib.php");
+
+$gpgname = @$_SERVER['argv'][1];
+
+function usage () {
+	printf ("usage: update-developers filename.gpg\n");
+	exit (1);
+}
+
+if ($gpgname == "") {
+	usage ();
+}
+
+$app_name = preg_replace ('/-.*/', '', basename (getcwd ()));
+$key_ids = get_gpg_key_ids_for_app ($app_name);
+
+$clearname = "DANGER.clear";
+
+@unlink ($clearname);
+$cmd = sprintf ("gpg --quiet --decrypt --output %s %s",
+		$clearname, $gpgname);
+system ($cmd, $rc);
+if ($rc) {
+	printf ("error decrypting %s\n", $gpgname);
+	exit (1);
+}
+
+
+$cmd = sprintf ("gpg --encrypt --output %s", escapeshellarg ($gpgname));
+foreach ($key_ids as $key_id) {
+	$cmd .= sprintf (" --recipient %s", escapeshellarg ($key_id));
+}
+$cmd .= sprintf (" %s", escapeshellarg ($clearname));
+
+@unlink ($gpgname);
+system ($cmd, $rc);
+if ($rc != 0) {
+	printf ("error encrypting %s\n", $gpgname);
+	exit (1);
+}
+
+unlink ($clearname);
+
+exit (0);
