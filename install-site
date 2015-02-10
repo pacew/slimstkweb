@@ -330,8 +330,6 @@ case "amazon":
 	system ("./apache-amazon", $rc);
 	if ($rc)
 		exit (1);
-	if (array_search ("setup-elb", $_SERVER['argv']))
-		system ("./setdns-elb", $rc);
 	break;
 }
 
