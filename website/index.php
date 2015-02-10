@@ -4,8 +4,6 @@ date_default_timezone_set ("UTC");
 
 echo ("hello6 " . strftime ("%Y-%m-%d %H:%M:%S"));
 
-require_once ("/var/slimstk/slimstk.php");
-
 function peb_backtrace () {
 	global $devel_mode;
 
