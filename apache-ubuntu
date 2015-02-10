@@ -49,9 +49,11 @@ then
     exit 1
 fi
 
-apache2ctl configtest > /dev/null 2>&1
+echo "checking apache configuration..."
+sudo apache2ctl configtest > /dev/null 2>&1
 if [ $? != 0 ]
 then
+    sudo apache2ctl configtest
     echo "pre-existing error ... stopping before making changes"
     exit 1
 fi
@@ -77,7 +79,7 @@ else
     sudo a2ensite -q $siteid
 fi
 
-apache2ctl configtest > TMP.err 2>&1
+sudo apache2ctl configtest > TMP.err 2>&1
 
 if [ $? != 0 ]
 then
@@ -87,7 +89,7 @@ then
     then
 	# put back avail, assume enabled is linked to it
 	cp $prev $avail
-	apache2ctl configtest > /dev/null 2>&1
+	sudo apache2ctl configtest > /dev/null 2>&1
 	if [ $? = 0 ]
 	then
 	    # apparently putting back the old config file is ok
@@ -113,7 +115,7 @@ then
 	# the running config
 	sudo a2dissite $siteid
 	sudo rm -f $avail $enabled
-	apache2ctl configtest > /dev/null 2>&1
+	sudo apache2ctl configtest > /dev/null 2>&1
 	if [ $? = 0 ]
 	then
 	    # aparently successful at restore prior apache state

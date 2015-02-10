@@ -2,9 +2,21 @@
 <?php /* -*- mode:php -*- */
 
 require_once ("/var/slimstk/slimstk.php");
-slimstk_init ();
+slimstk_cmd_init ();
 
 $enable_ssl = 0;
+
+$issue = file_get_contents ("/etc/issue");
+if (preg_match ('/Ubuntu 14/', $issue)) {
+	$systype = "ubuntu-14";
+} else if (preg_match ('/Ubuntu 12/', $issue)) {
+	$systype = "ubuntu-12";
+} else if (preg_match ('/Amazon/', $issue)) {
+	$systype = "amazon";
+} else {
+	printf ("unknown system type\n");
+	exit (1);
+}
 
 $apache_dir = "/etc/apache";
 if (! file_exists ($apache_dir))
@@ -21,7 +33,7 @@ preg_match ('/^(.*)-([^-]*)$/', $siteid, $parts);
 $config['site_name'] = $parts[1];
 $config['conf_key'] = $parts[2];
 
-if ($running_on_aws) {
+if ($systype == "amazon") {
 	$sinfo = NULL;
 	foreach ($stkinfo['sites'] as $name => $sinfo) {
 		if (strcmp ($name, $siteid) == 0)
@@ -71,16 +83,18 @@ if ($running_on_aws) {
 }
 
 function find_ports () {
+	global $systype;
 	global $port_base, $port_end, $ports_used;
 	global $apache_dir, $siteid;
 	global $config;
 
-	$ubuntu_version = intval (shell_exec ("lsb_release -rs"));
-	if ($ubuntu_version >= 14)
+	$suffix = "";
+	if ($systype == "ubuntu-14")
 		$suffix = ".conf";
 
 	$fname = sprintf ("%s/sites-available/%s%s",
 			  $apache_dir, $siteid, $suffix);
+
 	$my_prev_ports = array ();
 	if (($f = @fopen ($fname, "r")) != NULL) {
 		while (($row = fgets ($f)) != NULL) {
@@ -122,6 +136,12 @@ function alloc_port () {
 		}
 	}
 	return (-1);
+}
+
+$need_ports = 0;
+if (! isset ($config['site_port'])
+    || ($enable_ssl && ! isset ($config['ssl_port']))) {
+	find_ports ();
 }
 
 if (! isset ($config['site_port']))
@@ -263,14 +283,14 @@ $evars = array ();
 $evars['siteid'] = $config['siteid'];
 $evars['site_name'] = $config['site_name'];
 $evars['conf_key'] = $config['conf_key'];
-
+$evars['confdir'] = $slimstk['confdir'];
 $apache_conf = "";
 
 $apache_conf .= sprintf ("<Directory %s/website>\n", getcwd ());
 $apache_conf .= "  Options Indexes FollowSymLinks\n";
 $apache_conf .= "  AllowOverride None\n";
 $apache_conf .= "  Allow from all\n";
-if (! $running_on_aws)
+if ($systype == "ubuntu-14")
 	$apache_conf .= "  Require all granted\n";
 
 foreach ($evars as $name => $val) {
@@ -300,21 +320,19 @@ file_put_contents ($tmpname, $apache_conf);
 
 $issue = file_get_contents ("/etc/issue");
 
-if (preg_match ('/Ubuntu/', $issue)) {
+switch ($systype) {
+case "ubuntu-12": case "ubuntu-14":
 	system ("./apache-ubuntu", $rc);
 	if ($rc)
 		exit (1);
-} else if (preg_match ('/Amazon/', $issue)) {
+	break;
+case "amazon":
 	system ("./apache-amazon", $rc);
 	if ($rc)
 		exit (1);
-} else {
-	printf ("unknown system type\n");
-	exit (1);
-}
-
-if ($running_on_aws && array_search ("setup-elb", $_SERVER['argv'])) {
-	system ("./setdns-elb", $rc);
+	if (array_search ("setup-elb", $_SERVER['argv']))
+		system ("./setdns-elb", $rc);
+	break;
 }
 
 printf ("%s\n", $config['site_url']);
