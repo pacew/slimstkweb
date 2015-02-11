@@ -1,6 +1,7 @@
 <?php
 
 require_once ("/var/slimstk/slimstk.php");
+slimstk_init ();
 
 echo ("hello7 " . strftime ("%Y-%m-%d %H:%M:%S"));
 
