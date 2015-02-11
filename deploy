@@ -35,12 +35,7 @@ if ($match == 0) {
 	exit (1);
 }
 
-if (($appinfo = @$slimstk['apps'][$app_name]) == NULL) {
-	printf ("can't find appinfo in slimstk config\n");
-	exit (1);
-}
-
-if (($deploy_bucket = @$appinfo['deploy_bucket']) == NULL) {
+if (($deploy_bucket = @$slimstk['deploy_bucket']) == NULL) {
 	printf ("can't find deploy_bucket in slimstk config\n");
 	exit (1);
 }
