@@ -2,7 +2,7 @@
 
 date_default_timezone_set ("UTC");
 
-echo ("hello6 " . strftime ("%Y-%m-%d %H:%M:%S"));
+echo ("hello7 " . strftime ("%Y-%m-%d %H:%M:%S"));
 
 function peb_backtrace () {
 	global $devel_mode;
