@@ -240,7 +240,12 @@ function make_virtual_host ($args) {
 	$ret .= sprintf ("  DocumentRoot %s/website\n", getcwd ());
 	$ret .= sprintf ("  FileETag none\n");
 
-	$ret .= sprintf ("  php_flag session.gc_probability 0\n");
+	global $systype;
+	switch ($systype) {
+	case "ubuntu-12": case "ubuntu-14":
+		$ret .= sprintf ("  php_flag session.gc_probability 0\n");
+		break;
+	}
 	$ret .= sprintf ("  php_flag html_errors On\n");
 	$ret .= sprintf ("  php_flag display_errors On\n");
 
@@ -296,6 +301,9 @@ if ($systype == "ubuntu-14")
 foreach ($evars as $name => $val) {
 	$apache_conf .= sprintf ("  SetEnv %s \"%s\"\n",
 				 $name, addslashes ($val));
+
+	/* also add to current environment for benefit of get_db() later */
+	$_SERVER[$name] = $val;
 }
 
 $apache_conf .= "</Directory>\n";
@@ -331,6 +339,15 @@ case "amazon":
 	if ($rc)
 		exit (1);
 	break;
+}
+
+if (maybe_create_database ($_SERVER['siteid'], NULL) < 0) {
+	printf ("can't connect to database %s\n", $_SERVER['siteid']);
+} else {
+	slimstk_setup_schema ();
+
+	require_once ("schema.php");
+	dbpatch (NULL, $schema);
 }
 
 printf ("%s\n", $config['site_url']);
