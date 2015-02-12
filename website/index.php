@@ -1,13 +1,13 @@
 <?php
 
-require_once ("/var/slimstk/slimstk.php");
-slimstk_init ();
+require_once ("common.php");
 
-echo ("hello7 " . strftime ("%Y-%m-%d %H:%M:%S"));
+pstart ();
 
-slimstk_session ();
+$body .= "<div>hello " . strftime ("%Y-%m-%d %H:%M:%S")  . "</div>";
 
-var_dump ($_SESSION);
+$body .= sprintf ("session counter = %s\n", h ($_SESSION['foo']));
 
-$_SESSION['foo'] = 1 + @$_SESSION['foo'];
+$_SESSION['foo'] = 1 + intval (@$_SESSION['foo']);
 
+pfinish ();
