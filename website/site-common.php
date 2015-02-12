@@ -1,4 +1,4 @@
-<?
+<?php
 
 function banner_header () {
 	$ret = "";
