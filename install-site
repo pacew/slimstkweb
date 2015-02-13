@@ -4,7 +4,7 @@
 require_once ("/var/slimstk/slimstk.php");
 slimstk_cmd_init ();
 
-$enable_ssl = 0;
+$enable_ssl = 1;
 
 $issue = file_get_contents ("/etc/issue");
 if (preg_match ('/Ubuntu 14/', $issue)) {
