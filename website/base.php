@@ -539,7 +539,7 @@ $extra_scripts = "";
 function footer_scripts () {
 	$ret = "";
 	$ret .= "<script type='text/javascript'"
-		." src='/jquery-1.11.1.min.js'></script>\n";
+		." src='/jquery-FIXME.min.js'></script>\n";
 
 	return ($ret);
 }
